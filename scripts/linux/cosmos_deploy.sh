@@ -3,33 +3,31 @@
 # exit when any command fails
 set -e
 
-# Tag and push all the images to the local repository
-docker tag cosmos-base localhost:5000/cosmos-base:latest
-docker tag cosmos-gems localhost:5000/cosmos-gems:latest
-docker tag cosmos-cmd-tlm-api localhost:5000/cosmos-cmd-tlm-api:latest
-docker tag cosmos-script-runner-api localhost:5000/cosmos-script-runner-api:latest
-docker tag cosmos-frontend-init localhost:5000/cosmos-frontend-init:latest
-docker tag cosmos-operator localhost:5000/cosmos-operator:latest
-docker tag cosmos-init localhost:5000/cosmos-init:latest
+usage() {
+  echo "Usage: $1 [repository]" >&2
+  echo "*  repository: hostname of the docker repository" >&2
+  exit 1
+}
 
-docker push localhost:5000/cosmos-base:latest
-docker push localhost:5000/cosmos-gems:latest
-docker push localhost:5000/cosmos-cmd-tlm-api:latest
-docker push localhost:5000/cosmos-script-runner-api:latest
-docker push localhost:5000/cosmos-frontend-init:latest
-docker push localhost:5000/cosmos-operator:latest
-docker push localhost:5000/cosmos-init:latest
-
-if [[ "$1" == "dev" ]]; then
-  docker tag cosmos-elasticsearch localhost:5000/cosmos-elasticsearch:latest
-  docker tag cosmos-kibana localhost:5000/cosmos-kibana:latest
-  docker tag cosmos-fluentd localhost:5000/cosmos-fluentd:latest
-  docker tag cosmos-grafana localhost:5000/cosmos-grafana:latest
-  docker tag cosmos-prometheus localhost:5000/cosmos-prometheus:latest
-
-  docker push localhost:5000/cosmos-elasticsearch:latest
-  docker push localhost:5000/cosmos-kibana:latest
-  docker push localhost:5000/cosmos-fluentd:latest
-  docker push localhost:5000/cosmos-grafana:latest
-  docker push localhost:5000/cosmos-prometheus:latest
+if [[ "$#" -ne 1 ]]; then
+  usage $0
 fi
+
+# Tag and push all the images to the local repository
+docker tag ballaerospace/cosmosc2-ruby ${1}/cosmosc2-ruby:latest
+docker tag ballaerospace/cosmosc2-node ${1}/cosmosc2-node:latest
+docker tag ballaerospace/cosmosc2-base ${1}/cosmosc2-base:latest
+docker tag ballaerospace/cosmosc2-cmd-tlm-api ${1}/cosmosc2-cmd-tlm-api:latest
+docker tag ballaerospace/cosmosc2-script-runner-api ${1}/cosmosc2-script-runner-api:latest
+docker tag ballaerospace/cosmosc2-frontend-init ${1}/cosmosc2-frontend-init:latest
+docker tag ballaerospace/cosmosc2-operator ${1}/cosmosc2-operator:latest
+docker tag ballaerospace/cosmosc2-init ${1}/cosmosc2-init:latest
+
+docker push ${1}/cosmosc2-ruby:latest
+docker push ${1}/cosmosc2-node:latest
+docker push ${1}/cosmosc2-base:latest
+docker push ${1}/cosmosc2-cmd-tlm-api:latest
+docker push ${1}/cosmosc2-script-runner-api:latest
+docker push ${1}/cosmosc2-frontend-init:latest
+docker push ${1}/cosmosc2-operator:latest
+docker push ${1}/cosmosc2-init:latest

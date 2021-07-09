@@ -36,7 +36,13 @@ class ToolsController < ModelController
   # Set the tools position in the list
   # Passed position is an integer index starting with 0 being first in the list
   def position
-    authorize(permission: 'admin', scope: params[:scope], token: params[:token])
+    begin
+      authorize(permission: 'admin', scope: params[:scope], token: request.headers['HTTP_AUTHORIZATION'])
+    rescue Cosmos::AuthError => e
+      render(:json => { 'status' => 'error', 'message' => e.message }, :status => 401) and return
+    rescue Cosmos::ForbiddenError => e
+      render(:json => { 'status' => 'error', 'message' => e.message }, :status => 403) and return
+    end
     @model_class.set_position(name: params[:id], position: params[:position], scope: params[:scope])
     head :ok
   end
@@ -48,17 +54,11 @@ class ToolsController < ModelController
     tools.each do |key, tool|
       inline_tools[key] = tool if tool['inline_url'] and tool['shown']
     end
-    result << "{\n"
-    result << "  \"imports\": {\n"
-    index = 1
+    result = Hash.new
+    result["imports"] = Hash.new
     inline_tools.each do |key, tool|
-      result << "    \"@cosmosc2/tool-#{tool['folder_name']}\": \"/tools/#{tool['folder_name']}/#{tool['inline_url']}\""
-      result << "," unless index == inline_tools.length
-      result << "\n"
-      index += 1
+      result["imports"]["@cosmosc2/tool-#{tool['folder_name']}"] = "/tools/#{tool['folder_name']}/#{tool['inline_url']}"
     end
-    result << "  }\n"
-    result << "}\n"
     render :json => result
   end
 end

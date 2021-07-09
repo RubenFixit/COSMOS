@@ -27,17 +27,17 @@
         <v-spacer />
         <span>{{ title }}</span>
         <v-spacer />
-        <v-icon v-if="calcFullSize" @click="collapseAll"
-          >mdi-arrow-collapse</v-icon
-        >
+        <v-icon v-if="calcFullSize" @click="collapseAll">
+          mdi-arrow-collapse
+        </v-icon>
         <v-icon v-else @click="expandAll">mdi-arrow-expand</v-icon>
-        <v-icon v-if="fullWidth" @click="collapseWidth"
-          >mdi-arrow-collapse-horizontal</v-icon
-        >
+        <v-icon v-if="fullWidth" @click="collapseWidth">
+          mdi-arrow-collapse-horizontal
+        </v-icon>
         <v-icon v-else @click="expandWidth">mdi-arrow-expand-horizontal</v-icon>
-        <v-icon v-if="fullHeight" @click="collapseHeight"
-          >mdi-arrow-collapse-vertical</v-icon
-        >
+        <v-icon v-if="fullHeight" @click="collapseHeight">
+          mdi-arrow-collapse-vertical
+        </v-icon>
         <v-icon v-else @click="expandHeight">mdi-arrow-expand-vertical</v-icon>
         <v-icon @click="minMaxTransition">mdi-window-minimize</v-icon>
         <v-icon @click="$emit('close-graph')">mdi-close-box</v-icon>
@@ -65,41 +65,32 @@
           v-model="title"
           hide-details
           data-test="edit-title"
-        ></v-text-field>
-        <v-card-text class="pa-0"
-          >Select a start date/time for the graph. Leave blank for start now.
+        />
+        <v-card-text class="pa-0">
+          Select a start date/time for the graph. Leave blank for start now.
         </v-card-text>
         <date-time-chooser
           :required="false"
           @date-time="graphStartDateTime = $event"
           dateLabel="Start Date"
           timeLabel="Start Time"
-        ></date-time-chooser>
-        <v-card-text class="pa-0"
-          >Select a end date/time for the graph. Leave blank for continuous
+        />
+        <v-card-text class="pa-0">
+          Select a end date/time for the graph. Leave blank for continuous
           real-time graphing.
         </v-card-text>
         <date-time-chooser
           dateLabel="End Date"
           timeLabel="End Time"
           @date-time="graphEndDateTime = $event"
-        ></date-time-chooser>
-        <v-text-field
-          label="Min X"
-          v-model="graphMinX"
-          hide-details
-        ></v-text-field>
-        <v-text-field
-          label="Max X"
-          v-model="graphMaxX"
-          hide-details
-        ></v-text-field>
+        />
+        <v-text-field label="Min Y" v-model="graphMinY" hide-details />
+        <v-text-field label="Max Y" v-model="graphMaxY" hide-details />
         <v-container fluid>
           <v-row v-for="(item, key) in items" :key="key">
-            <v-col
-              >{{ item.targetName }} {{ item.packetName }}
-              {{ item.itemName }}</v-col
-            >
+            <v-col>
+              {{ item.targetName }} {{ item.packetName }} {{ item.itemName }}
+            </v-col>
             <v-btn color="error" @click="deleteItem(item)">Remove</v-btn>
           </v-row></v-container
         >
@@ -118,9 +109,9 @@
     >
       <v-list>
         <v-list-item @click="editGraph = true">
-          <v-list-item-title style="cursor: pointer"
-            >Edit {{ title }}</v-list-item-title
-          >
+          <v-list-item-title style="cursor: pointer">
+            Edit {{ title }}
+          </v-list-item-title>
         </v-list-item>
       </v-list>
     </v-menu>
@@ -141,7 +132,7 @@
           outlined
           v-model="this.selectedItem.valueType"
           @change="changeType($event)"
-        ></v-select>
+        />
         <v-card-actions>
           <v-btn color="primary" @click="editItem = false">Ok</v-btn>
         </v-card-actions>
@@ -159,14 +150,14 @@
     >
       <v-list>
         <v-list-item @click="editItem = true">
-          <v-list-item-title style="cursor: pointer"
-            >Edit {{ selectedItem.itemName }}</v-list-item-title
-          >
+          <v-list-item-title style="cursor: pointer">
+            Edit {{ selectedItem.itemName }}
+          </v-list-item-title>
         </v-list-item>
         <v-list-item @click="deleteItem(selectedItem)">
-          <v-list-item-title style="cursor: pointer"
-            >Delete {{ selectedItem.itemName }}</v-list-item-title
-          >
+          <v-list-item-title style="cursor: pointer">
+            Delete {{ selectedItem.itemName }}
+          </v-list-item-title>
         </v-list-item>
       </v-list>
     </v-menu>
@@ -175,10 +166,10 @@
 
 <script>
 import DateTimeChooser from './DateTimeChooser'
-import * as ActionCable from 'actioncable'
 import uPlot from 'uplot'
 import bs from 'binary-search'
 import { toDate, format, getTime } from 'date-fns'
+import Cable from '../services/cable.js'
 
 require('uplot/dist/uPlot.min.css')
 
@@ -255,8 +246,8 @@ export default {
       title: '',
       overview: null,
       data: [[]],
-      graphMinX: '',
-      graphMaxX: '',
+      graphMinY: '',
+      graphMaxY: '',
       graphStartDateTime: this.startTime,
       graphEndDateTime: null,
       indexes: {},
@@ -264,7 +255,7 @@ export default {
       drawInterval: null,
       zoomChart: false,
       zoomOverview: false,
-      cable: ActionCable.Cable,
+      cable: new Cable(),
       subscription: null,
       colors: [
         'blue',
@@ -296,8 +287,6 @@ export default {
     },
   },
   created() {
-    // Creating the cable can be done once, subscriptions come and go
-    this.cable = ActionCable.createConsumer('/cosmos-api/cable')
     this.title = 'Graph ' + this.id
     for (const [index, item] of this.items.entries()) {
       this.data.push([]) // initialize the empty data arrays
@@ -550,17 +539,17 @@ export default {
       }
       this.graph.setScale('x', { min, max })
     },
-    graphMinX: function (newVal, oldVal) {
+    graphMinY: function (newVal, oldVal) {
       let val = parseFloat(newVal)
       if (!isNaN(val)) {
-        this.graphMinX = val
+        this.graphMinY = val
       }
       this.setGraphRange()
     },
-    graphMaxX: function (newVal, oldVal) {
+    graphMaxY: function (newVal, oldVal) {
       let val = parseFloat(newVal)
       if (!isNaN(val)) {
-        this.graphMaxX = val
+        this.graphMaxY = val
       }
       this.setGraphRange()
     },
@@ -641,63 +630,66 @@ export default {
     setGraphRange() {
       let pad = 0.1
       if (
-        this.graphMinX ||
-        this.graphMinX === 0 ||
-        this.graphMaxX ||
-        this.graphMaxX === 0
+        this.graphMinY ||
+        this.graphMinY === 0 ||
+        this.graphMaxY ||
+        this.graphMaxY === 0
       ) {
         pad = 0
       }
       this.graph.scales.y.range = (u, dataMin, dataMax) => {
         let min = dataMin
-        if (this.graphMinX || this.graphMinX === 0) {
-          min = this.graphMinX
+        if (this.graphMinY || this.graphMinY === 0) {
+          min = this.graphMinY
         }
         let max = dataMax
-        if (this.graphMaxX || this.graphMaxX === 0) {
-          max = this.graphMaxX
+        if (this.graphMaxY || this.graphMaxY === 0) {
+          max = this.graphMaxY
         }
         return uPlot.rangeNum(min, max, pad, true)
       }
     },
     subscribe(endTime = null) {
-      let subscription = this.cable.subscriptions.create(
-        {
-          channel: 'StreamingChannel',
-          scope: 'DEFAULT',
-        },
-        {
+      this.cable
+        .createSubscription('StreamingChannel', localStorage.scope, {
           received: (data) => this.received(data),
           connected: () => {
-            var items = []
-            this.items.forEach((item) => {
-              items.push(
-                'TLM__' +
-                  item.targetName +
-                  '__' +
-                  item.packetName +
-                  '__' +
-                  item.itemName +
-                  '__' +
-                  item.valueType
-              )
-            })
-            subscription.perform('add', {
-              scope: 'DEFAULT',
-              mode: 'DECOM',
-              items: items,
-              start_time: this.graphStartDateTime,
-              end_time: endTime,
-            })
+            this.onConnected(endTime)
           },
           // TODO: How should we handle server side disconnect
           // disconnected: () => console.log('disconnected'),
-        }
-      )
-      // Store the subscription if we haven't already
-      if (this.subscription === null) {
-        this.subscription = subscription
-      }
+        })
+        .then((subscription) => {
+          // Store the subscription if we haven't already
+          if (this.subscription === null) {
+            this.subscription = subscription
+          }
+        })
+    },
+    onConnected(endTime) {
+      var items = []
+      this.items.forEach((item) => {
+        items.push(
+          'TLM__' +
+            item.targetName +
+            '__' +
+            item.packetName +
+            '__' +
+            item.itemName +
+            '__' +
+            item.valueType
+        )
+      })
+      CosmosAuth.updateToken(CosmosAuth.defaultMinValidity).then(() => {
+        this.subscription.perform('add', {
+          scope: localStorage.scope,
+          mode: 'DECOM',
+          token: localStorage.token,
+          items: items,
+          start_time: this.graphStartDateTime,
+          end_time: endTime,
+        })
+      })
     },
     // throttle(cb, limit) {
     //   var wait = false
@@ -840,11 +832,14 @@ export default {
       this.indexes[key] = index
 
       if (this.subscription) {
-        this.subscription.perform('add', {
-          scope: 'DEFAULT',
-          items: [key],
-          start_time: this.graphStartDateTime,
-          end_time: this.graphEndDateTime, // normally null which means continue in real-time
+        CosmosAuth.updateToken(CosmosAuth.defaultMinValidity).then(() => {
+          this.subscription.perform('add', {
+            scope: localStorage.scope,
+            token: localStorage.token,
+            items: [key],
+            start_time: this.graphStartDateTime,
+            end_time: this.graphEndDateTime, // normally null which means continue in real-time
+          })
         })
       }
     },
@@ -859,7 +854,7 @@ export default {
         '__' +
         item.valueType
       this.subscription.perform('remove', {
-        scope: 'DEFAULT',
+        scope: localStorage.scope,
         items: [key],
       })
       const index = this.reorderIndexes(key)

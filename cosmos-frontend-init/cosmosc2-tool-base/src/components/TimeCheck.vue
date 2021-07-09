@@ -28,7 +28,7 @@
         This can cause issues and might have unknown side effects.
         <v-checkbox v-model="suppress" label="Don't show this again" />
       </v-card-text>
-      <v-divider></v-divider>
+      <v-divider />
       <v-card-actions>
         <v-btn color="primary" text @click="dismiss"> Dismiss </v-btn>
       </v-card-actions>
@@ -80,6 +80,7 @@ export default {
     dialog: function () {
       return (
         !this.dismissed &&
+        !window.Cypress && // TODO: Handle this in Cypress (have all the tests dismiss it, or fix the clock in Cypress)
         Math.abs(this.discrepancy) >= ALLOWABLE_DISCREPANCY_MS
       )
     },

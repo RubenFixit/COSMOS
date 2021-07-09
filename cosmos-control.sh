@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 
 usage() {
-  echo "Usage: $1 [setup, start, stop, cleanup, build, deploy]" >&2
-  echo "  All commands take a 'dev' option to start additional containers" >&2
-  echo "*  setup: setup containers to build and run" >&2
-  echo "*  start: start the minimal docker run for cosmos" >&2
+  echo "Usage: $1 [cosmos, start, stop, cleanup, build, deploy]" >&2
+  echo "*  cosmos: run a cosmos command ('cosmos help' for more info)" 1>&2
+  echo "*  start: start the docker-compose cosmos" >&2
   echo "*  stop: stop the running dockers for cosmos" >&2
+  echo "*  restart: stop and start the minimal docker run for cosmos" >&2
   echo "*  cleanup: cleanup network and volumes for cosmos" >&2
   echo "*  build: build the containers for cosmos" >&2
+  echo "*  run: run the prebuilt containers for cosmos" >&2
+  echo "*  dev: run cosmos in a dev mode" >&2
+  echo "*  dind: build and run the docker development container (cosmos-build)" >&2
   echo "*  deploy: deploy the containers to localhost repository" >&2
+  echo "*    repository: hostname of the docker repository" >&2
+  echo "*  util: various helper commands" >&2
+  echo "*    encode: encode a string to base64" >&2
+  echo "*    hash: hash a string using SHA-256" >&2
   exit 1
 }
 
@@ -17,25 +24,45 @@ if [[ "$#" -eq 0 ]]; then
 fi
 
 case $1 in
-setup)
-  scripts/linux/cosmos_setup.sh
+cosmos)
+  # Start (and remove when done --rm) the cosmos-base container with the current working directory
+  # mapped as volume (-v) /cosmos/local and container working directory (-w) also set to /cosmos/local.
+  # This allows tools running in the container to have a consistent path to the current working directory.
+  # Run the command "ruby /cosmos/bin/cosmos" with all parameters starting at 2 since the first is 'cosmos'
+  docker run --rm -v $(pwd):/cosmos/local -w /cosmos/local cosmos-base ruby /cosmos/bin/cosmos ${@:2}
   ;;
 start)
   scripts/linux/cosmos_setup.sh
-  scripts/linux/cosmos_start.sh $2
+  docker-compose -f compose.yaml -f compose-build.yaml build
+  docker-compose -f compose.yaml up -d
   ;;
 stop)
-  scripts/linux/cosmos_stop.sh $2
+  docker-compose -f compose.yaml down
+  ;;
+restart)
+  docker-compose -f compose.yaml restart
   ;;
 cleanup)
-  scripts/linux/cosmos_cleanup.sh $2
+  docker-compose -f compose.yaml down -v
   ;;
 build)
   scripts/linux/cosmos_setup.sh
-  scripts/linux/cosmos_build.sh $2
+  docker-compose -f compose.yaml -f compose-build.yaml build
   ;;
+run)
+  docker-compose -f compose.yaml up -d
+  ;;
+dev)
+  docker-compose -f compose.yaml -f compose-dev.yaml up -d
+  ;;
+dind)
+  docker build -t cosmos-build .
+  docker run --rm -ti -v /var/run/docker.sock:/var/run/docker.sock cosmos-build
 deploy)
   scripts/linux/cosmos_deploy.sh $2
+  ;;
+util)
+  scripts/linux/cosmos_util.sh $2 $3
   ;;
 *)
   usage $0

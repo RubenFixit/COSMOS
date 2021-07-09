@@ -1,5 +1,6 @@
 import Vue from 'vue'
 import App from './App.vue'
+import router from './router'
 
 Vue.config.productionTip = false
 
@@ -14,7 +15,11 @@ Vue.component('astro-badge', AstroBadge)
 Vue.component('astro-badge-icon', AstroBadgeIcon)
 Vue.component('astro-status-indicator', AstroStatusIndicator)
 
-new Vue({
-  vuetify,
-  render: (h) => h(App),
-}).$mount('#cosmos-main')
+const options = CosmosAuth.getInitOptions()
+CosmosAuth.init(options).then(() => {
+  new Vue({
+    router,
+    vuetify,
+    render: (h) => h(App),
+  }).$mount('#cosmos-main')
+})

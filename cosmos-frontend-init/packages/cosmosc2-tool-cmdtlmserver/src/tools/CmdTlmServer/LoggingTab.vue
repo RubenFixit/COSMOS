@@ -27,42 +27,42 @@
       </v-row>
       <v-row>
         <v-col>
-          <v-btn block color="primary" @click="startLogging()"
-            >Start Logging On All</v-btn
-          >
+          <v-btn block color="primary" @click="startLogging()">
+            Start Logging On All
+          </v-btn>
         </v-col>
         <v-col>
-          <v-btn block color="primary" @click="stopLogging()"
-            >Stop Logging On All</v-btn
-          >
-        </v-col>
-      </v-row>
-      <v-row>
-        <v-col>
-          <v-btn block color="primary" @click="startTlmLogging('ALL')"
-            >Start Telemetry Logging on All</v-btn
-          >
-        </v-col>
-        <v-col>
-          <v-btn block color="primary" @click="stopTlmLogging('ALL')"
-            >Stop Telemetry Logging on All</v-btn
-          >
+          <v-btn block color="primary" @click="stopLogging()">
+            Stop Logging On All
+          </v-btn>
         </v-col>
       </v-row>
       <v-row>
         <v-col>
-          <v-btn block color="primary" @click="startCmdLogging('ALL')"
-            >Start Command Logging on All</v-btn
-          >
+          <v-btn block color="primary" @click="startTlmLogging('ALL')">
+            Start Telemetry Logging on All
+          </v-btn>
         </v-col>
         <v-col>
-          <v-btn block color="primary" @click="stopCmdLogging('ALL')"
-            >Stop Command Logging on All</v-btn
-          >
+          <v-btn block color="primary" @click="stopTlmLogging('ALL')">
+            Stop Telemetry Logging on All
+          </v-btn>
+        </v-col>
+      </v-row>
+      <v-row>
+        <v-col>
+          <v-btn block color="primary" @click="startCmdLogging('ALL')">
+            Start Command Logging on All
+          </v-btn>
+        </v-col>
+        <v-col>
+          <v-btn block color="primary" @click="stopCmdLogging('ALL')">
+            Stop Command Logging on All
+          </v-btn>
         </v-col>
       </v-row>
     </v-container>
-    <PacketLogInfo v-for="log in loggers" :log="log" :key="log.name" />
+    <packet-log-info v-for="log in loggers" :log="log" :key="log.name" />
     <br />
     Note: Buffered IO operations cause file size to not reflect total logged
     data size until the log file is closed.

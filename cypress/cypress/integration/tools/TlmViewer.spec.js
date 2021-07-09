@@ -23,6 +23,7 @@ describe('TlmViewer', () => {
     cy.hideNav()
     cy.server()
     cy.route('POST', '/cosmos-api/api').as('api')
+    cy.wait(100)
     cy.chooseVSelect('Select Target', target)
     cy.chooseVSelect('Select Screen', screen)
     cy.contains('Show Screen').click()

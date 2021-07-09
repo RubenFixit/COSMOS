@@ -19,19 +19,19 @@
 
 <template>
   <div>
-    <TopBar :menus="menus" :title="title" />
+    <top-bar :menus="menus" :title="title" />
     <v-tabs v-model="curTab" fixed-tabs>
       <v-tab v-for="(tab, index) in tabs" :key="index">{{ tab }}</v-tab>
     </v-tabs>
     <v-tabs-items v-model="curTab">
       <v-tab-item :eager="true">
         <keep-alive>
-          <limits-control ref="control"></limits-control>
+          <limits-control ref="control" />
         </keep-alive>
       </v-tab-item>
       <v-tab-item :eager="true">
         <keep-alive>
-          <limits-events ref="events"></limits-events>
+          <limits-events ref="events" />
         </keep-alive>
       </v-tab-item>
     </v-tabs-items>
@@ -41,8 +41,8 @@
 <script>
 import LimitsControl from '@/tools/LimitsMonitor/LimitsControl'
 import LimitsEvents from '@/tools/LimitsMonitor/LimitsEvents'
-import * as ActionCable from 'actioncable'
 import TopBar from '@cosmosc2/tool-common/src/components/TopBar'
+import Cable from '@cosmosc2/tool-common/src/services/cable.js'
 
 export default {
   components: {
@@ -55,8 +55,8 @@ export default {
       title: 'Limits Monitor',
       curTab: null,
       tabs: ['Limits', 'Log'],
-      cable: ActionCable.Cable,
-      subscription: ActionCable.Channel,
+      cable: new Cable(),
+      subscription: null,
       menus: [
         {
           label: 'File',
@@ -73,21 +73,24 @@ export default {
     }
   },
   created() {
-    this.cable = ActionCable.createConsumer('/cosmos-api/cable')
-    this.subscription = this.cable.subscriptions.create(
-      {
-        channel: 'LimitsEventsChannel',
-        history_count: 1000,
-        scope: 'DEFAULT',
-      },
-      {
-        received: (data) => {
-          const parsed = JSON.parse(data)
-          this.$refs.control.handleMessages(parsed)
-          this.$refs.events.handleMessages(parsed)
+    this.cable
+      .createSubscription(
+        'LimitsEventsChannel',
+        localStorage.scope,
+        {
+          received: (data) => {
+            const parsed = JSON.parse(data)
+            this.$refs.control.handleMessages(parsed)
+            this.$refs.events.handleMessages(parsed)
+          },
         },
-      }
-    )
+        {
+          history_count: 1000,
+        }
+      )
+      .then((subscription) => {
+        this.subscription = subscription
+      })
   },
   destroyed() {
     if (this.subscription) {

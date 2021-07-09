@@ -24,6 +24,9 @@ require 'cosmos'
 require 'cosmos/utilities/s3'
 require 'cosmos/models/scope_model'
 require 'cosmos/models/plugin_model'
+require 'cosmos/bridge/bridge'
+require 'ostruct'
+require 'optparse'
 require 'zip'
 require 'zip/filesystem'
 require 'fileutils'
@@ -31,257 +34,155 @@ require 'find'
 require 'aws-sdk-s3'
 require 'json'
 require 'redis'
+require 'erb'
 
-$redis_url = ENV['COSMOS_REDIS_URL'] || (ENV['COSMOS_DEVEL'] ? 'redis://127.0.0.1:6379/0' : 'redis://cosmos-redis:6379/0')
+$redis_url = ENV['COSMOS_REDIS_URL']
+
+# Build the OpenStruct and OptionParser here as constants so we can use in methods
+MIGRATE_OPTIONS = OpenStruct.new
+MIGRATE_OPTIONS.all = false
+MIGRATE_PARSER = OptionParser.new do |op|
+  op.banner = "cosmos migrate PLUGIN [TGT1...]  # Create a COSMOS 5 plugin from existing COSMOS 4 targets"
+  op.on("-a", "--all", "Move all COSMOS 4 targets into a single COSMOS 5 plugin") do
+    MIGRATE_OPTIONS.all = true
+  end
+end
 
 # Prints the usage text for the cosmos executable
 def print_usage
   puts "Usage:"
-  puts "  cosmos help                   # Displays this information"
-  puts "  cosmos load                   # Loads a COSMOS user directory onto the cluster"
-  puts "  cosmos install directory_name # Creates a barebones COSMOS user directory"
-  puts "  cosmos demo directory_name    # Creates a demo COSMOS user directory"
-  puts "  cosmos docs                   # Launches the documentation server"
-  puts "  cosmos generate target <NAME> # Generate a COSMOS target"
+  puts "  cosmos help                          # Displays this information"
+  puts "  cosmos rake                          # Runs rake in the local directory"
+  puts "  cosmos load /PATH/FILENAME.gem       # Loads a COSMOS plugin gem file"
+  puts "  cosmos generate plugin PLUGIN_NAME   # Generate a COSMOS plugin"
+  puts "  #{MIGRATE_PARSER}"
+  puts "  cosmos bridge CONFIG_FILENAME        # Run COSMOS host bridge"
+  puts "  cosmos bridgesetup CONFIG_FILENAME   # Create a default config file"
+  puts "  cosmos rubysloc                      # Counts Ruby SLOC recursively. Run with --help for more info."
+  # puts "  cosmos xtce_converter                # Convert to and from the XTCE format. Run with --help for more info."
+  puts "  cosmos cstol_converter               # Converts CSTOL files (.prc) to COSMOS. Run with --help for more info."
   puts ""
-  puts "Other Tools included with COSMOS:"
-  puts "  rubysloc                      # Counts Ruby SLOC recursively"
-  puts "  cstol_converter               # Converts all *.prc files recursively to COSMOS"
-  puts ""
-end
-
-def install(install_type, install_folder)
-  dir_name = ARGV[1]
-  unless dir_name.nil?
-    puts "Attempting COSMOS #{install_type} Installation to: #{dir_name}"
-
-    # Determine if directory exists
-    unless File.directory?(dir_name)
-      # Create Directory
-      FileUtils.makedirs(dir_name, { :verbose => true })
-
-      # Copy files from gem install directory into new project
-      FileUtils.cp_r(File.join(::Cosmos::PATH, install_folder, '.'), dir_name, { :verbose => true })
-
-      puts "Complete"
-    else
-      puts "ERROR: Directory #{dir_name} already exists... aborting"
-    end
-  else
-    puts "ERROR: Directory must be given to install to"
-  end
-end
-
-def gen_tgt(target)
-  "# If you have custom limits responses or conversions you require them here
-#REQUIRE #{target}_limits_response.rb
-#REQUIRE #{target}_conversion.rb
-
-# Ignored Parameters
-# (parameters you don't want to see by default in various tools)
-IGNORE_PARAMETER ID
-
-# Ignored Items
-# (items you don't want to see by default in various tools)
-IGNORE_ITEM ID
-
-# You can explicitly define the command and telemetry files
-# you want to process and the order they are processed.
-# If not then all files in cmd_tlm are processed in alphabetical order
-#COMMANDS cmd.txt
-#TELEMETRY tlm.txt
-"
-end
-
-def gen_int(target)
-  "# This is a segment of the main config/tools/cmd_tlm_server/cmd_tlm_server.txt
-# that will be used when that files specifies AUTO_INTERFACE_TARGETS or INTERFACE_TARGET #{target}.
-
-# Modify this according to your actual target connection
-# Please see the COSMOS Interface Configuration documentation
-
-INTERFACE #{target}_INT tcpip_client_interface.rb 127.0.0.1 8080 8081 10.0 nil BURST 4 0xDEADBEEF
-  TARGET #{target}
-"
-end
-
-def gen_cmd(target)
-  %Q(COMMAND #{target} COMMAND BIG_ENDIAN "Packet description"
-  # Keyword           Name  BitSize Type   Min Max  Default  Description
-  APPEND_ID_PARAMETER ID    16      INT    1   1    1        "Identifier"
-  APPEND_PARAMETER    VALUE 32      FLOAT  0   10.5 2.5      "Value"
-  APPEND_PARAMETER    BOOL  8       UINT   MIN MAX  0        "Boolean"
-    STATE FALSE 0
-    STATE TRUE 1
-  APPEND_PARAMETER    LABEL 0       STRING          "COSMOS" "The label to apply"
-)
-end
-
-def gen_tlm(target)
-  %Q(TELEMETRY #{target} STATUS BIG_ENDIAN "Telemetry description"
-  # Keyword      Name  BitSize Type   ID Description
-  APPEND_ID_ITEM ID    16      INT    1  "Identifier"
-  APPEND_ITEM    VALUE 32      FLOAT     "Value"
-  APPEND_ITEM    BOOL  8       UINT      "Boolean"
-    STATE FALSE 0
-    STATE TRUE 1
-  APPEND_ITEM    LABEL 0       STRING    "The label to apply"
-)
-end
-
-def gen_lib(target)
-  "# This class can be used in your scripts like so:
-#   require '#{target.downcase}'
-#   #{target.downcase} = #{target.capitalize}.new
-#   #{target.downcase}.utility
-# For more information see the COSMOS scripting guide
-
-class #{target.capitalize}
-  def utility
-  end
-end
-"
-end
-
-def gen_proc(target)
-  %Q(# Script Runner test script
-cmd("#{target} COMMAND")
-wait_check("#{target} STATUS BOOL == 'FALSE'", 5)
-)
-end
-
-def gen_test(target)
-  %Q(# To add this test to Test Runner edit config/tools/test_runner/test_runner.txt
-# Add this line:
-#   LOAD_UTILITY '#{target.downcase}_test'
-#
-# Test Runner test script
-class #{target.capitalize}Test < Cosmos::Test
-  # def setup
-  #   # Implement group level setup
-  # end
-
-  def test_command
-    cmd("#{target} COMMAND")
-    wait_check("#{target} STATUS BOOL == 'FALSE'", 5)
-  end
-
-  # def teardown
-  #   # Implement group level teardown
-  # end
-end
-
-class #{target.capitalize}Suite < Cosmos::TestSuite
-  # def setup
-  #   # Implement suite level setup
-  # end
-
-  def initialize
-    super()
-    add_test('#{target.capitalize}Test')
-  end
-
-  # def teardown
-  #   # Implement suite level teardown
-  # end
-end
-)
-end
-
-def gen_screen(target)
-  %Q(SCREEN AUTO AUTO 1.0
-
-TITLE "Status"
-
-VERTICALBOX
-  SECTIONHEADER "Information"
-  LABELVALUE #{target} STATUS VALUE
-  LABELVALUE #{target} STATUS BOOL
-END
-)
 end
 
 def generate(args)
   case args[0]
-  when 'target'
-    unless File.exist?('./config/targets/')
-      puts "generator must be run at the root of the COSMOS user installation"
-      return
-    end
+  when 'plugin'
     if args.length != 2
-      puts "Usage: cosmos generate target <NAME>"
-      return
+      abort("Usage: cosmos generate plugin <NAME>")
     end
-    target = args[1].upcase
-    target_path = File.join("./config/targets/#{target}")
-    if File.exist?(target_path)
-      puts "Warning! Target #{target} already exists! Completely DELETE existing target? (N/y)"
-      STDOUT.flush # Output the warning
-      name = STDIN.gets.chomp
-      if name != 'y'
-        puts "Aborting generator"
-        return
+    if args[1] =~ /\s/
+      abort("Plugin names can not have spaces!")
+    end
+
+    plugin = args[1].downcase.gsub(/_+|-+/, '-')
+    plugin_name = "cosmos-#{plugin}"
+    if File.exist?(plugin_name)
+      abort("Plugin #{plugin_name} already exists!")
+    end
+    FileUtils.mkdir(plugin_name)
+    Dir.chdir(plugin_name) # Change to the plugin path to make copying easier
+
+    # Grab the plugin template
+    template_dir = "#{File.dirname(__FILE__)}/../templates/plugin-template"
+    target_name = plugin.upcase.gsub('-', '_')
+    target_lib_filename = "#{target_name.downcase}.rb"
+    target_class = target_lib_filename.filename_to_class_name
+    target_object = target_name.downcase
+    b = binding
+
+    Dir.glob("#{template_dir}/**/*").each do |file|
+      base_name = file.sub("#{template_dir}/", '')
+      # Rename the template TARGET to our actual target named after the plugin
+      base_name.sub!("targets/TARGET", "targets/#{target_name}")
+      if File.directory?(file)
+        FileUtils.mkdir(base_name)
+        next
       end
-      FileUtils.rm_rf target_path
-      sleep 1 # Allow the delete to occur
+      base_name.sub!("target.rb", target_lib_filename)
+      base_name.sub!("plugin.gemspec", "#{plugin_name}.gemspec")
+      output = ERB.new(File.read(file)).result(b)
+      File.open(base_name, 'w') do |file|
+        file.write output
+      end
     end
-    FileUtils.mkdir(target_path)
-    File.open(File.join(target_path, 'target.txt'), 'w') { |file| file.write(gen_tgt(target)) }
-    File.open(File.join(target_path, 'cmd_tlm_server.txt'), 'w') { |file| file.write(gen_int(target)) }
-    FileUtils.mkdir(File.join(target_path, 'cmd_tlm'))
-    File.open(File.join(target_path, 'cmd_tlm', 'cmd.txt'), 'w') { |file| file.write(gen_cmd(target)) }
-    File.open(File.join(target_path, 'cmd_tlm', 'tlm.txt'), 'w') { |file| file.write(gen_tlm(target)) }
-    FileUtils.mkdir(File.join(target_path, 'lib'))
-    File.open(File.join(target_path, 'lib', "#{target.downcase}.rb"), 'w') { |file| file.write(gen_lib(target)) }
-    FileUtils.mkdir(File.join(target_path, 'procedures'))
-    File.open(File.join(target_path, 'procedures', "#{target.downcase}_script.rb"), 'w') { |file| file.write(gen_proc(target)) }
-    File.open(File.join(target_path, 'procedures', "#{target.downcase}_test.rb"), 'w') { |file| file.write(gen_test(target)) }
-    FileUtils.mkdir(File.join(target_path, 'screens'))
-    File.open(File.join(target_path, 'screens', "status.txt"), 'w') { |file| file.write(gen_screen(target)) }
 
-    puts "Target #{target} successfully generated!\n"
-    puts "Edit config/system/system.txt add add the line 'DECLARE_TARGET #{target}'"
-    # AUTO_INTERFACE_TARGETS # Use cmd_tlm_server.txt from all targets declared in system.txt
-    puts "You may also have to edit your config/tools/cmd_tlm_server/cmd_tlm_server.txt"
-    puts "and interface the target unless you're using AUTO_INTERFACE_TARGETS."
-    puts "See the COSMOS System Configuration documentation for more details.\n"
+    puts "Plugin #{plugin_name} successfully generated!\n"
+    return target_name # This makes the migrate method easier
   else # Unknown generator
-    puts "Unknown generator #{args[0]}"
+    abort("Unknown generator #{args[0]}")
   end
 end
 
-def limits_change_callback(packet, item, old_limits_state, value, log_change)
-  if log_change
-    # Write to Server Messages that limits state has changed
-    tgt_pkt_item_str = "#{packet.target_name} #{packet.packet_name} #{item.name} = #{value} is"
-    packet_time = packet.packet_time
-    pkt_time_str = ""
-    pkt_time_str << " (#{packet.packet_time.sys.formatted})" if packet_time
-    case item.limits.state
-    when :BLUE
-      Cosmos::Logger.info "#{tgt_pkt_item_str} #{item.limits.state}#{pkt_time_str}"
-    when :GREEN, :GREEN_LOW, :GREEN_HIGH
-      Cosmos::Logger.info "#{tgt_pkt_item_str} #{item.limits.state}#{pkt_time_str}"
-    when :YELLOW, :YELLOW_LOW, :YELLOW_HIGH
-      Cosmos::Logger.warn "#{tgt_pkt_item_str} #{item.limits.state}#{pkt_time_str}"
-    when :RED, :RED_LOW, :RED_HIGH
-      Cosmos::Logger.error "#{tgt_pkt_item_str} #{item.limits.state}#{pkt_time_str}"
-    else
-      Cosmos::Logger.error "#{tgt_pkt_item_str} UNKNOWN#{pkt_time_str}"
-    end
+def migrate(args)
+  MIGRATE_PARSER.parse!(args)
+  abort(MIGRATE_PARSER.to_s) if args.length == 0
+  if MIGRATE_OPTIONS.all and args.length > 1
+    puts "Only specify the plugin name when using --all"
+    abort(MIGRATE_PARSER.to_s)
   end
-end
+  if !MIGRATE_OPTIONS.all and args.length < 2
+    puts "Specify the individual target names when not using --all"
+    abort(MIGRATE_PARSER.to_s)
+  end
+  if Dir.glob("config/targets/**/*").empty?
+    puts "No targets found in config/targets/*"
+    puts "Migrate must be run within an existing COSMOS configuration"
+    abort(MIGRATE_PARSER.to_s)
+  end
 
-def check_limits(filenames)
-  Cosmos::Logger.level = Cosmos::Logger::INFO
-  packet_log_reader = Cosmos::System.default_packet_log_reader.new(*Cosmos::System.default_packet_log_reader_params)
-  filenames.each do |filename|
-    packet_log_reader.open(filename)
-    Cosmos::System.telemetry.limits_change_callback = method(:limits_change_callback)
-    packet_log_reader.each(filename) do |packet|
-      packet.check_limits
+  ###############################################################
+  # Create the framework for the plugin
+  # NOTE: generate does a chdir to be inside the plugin directory
+  ###############################################################
+  plugin = args.shift
+  target_name = generate(['plugin', plugin])
+  # Delete target contents from the plugin framework (but keep directory)
+  FileUtils.rm_rf Dir.glob("targets/#{target_name}/*")
+
+  if MIGRATE_OPTIONS.all
+    # Grab all target directories to match the command line input
+    args = Dir.glob("../config/targets/*").map { |path| File.basename(path) }
+  else
+    # Ensure targets passed in on command line actually exist
+    args.each do |target|
+      path = File.join('..', 'config', 'targets', target)
+      unless File.exist?(path)
+        puts "Target #{path} does not exist!"
+        abort(MIGRATE_PARSER.to_s)
+      end
     end
   end
+
+  # Overwrite plugin.txt with specified targets
+  plugin = File.open('plugin.txt', 'w')
+  plugin.puts "TARGET #{target_name}"
+
+  args.each do |target|
+    puts "Migrating target #{target}"
+    FileUtils.cp_r "../config/targets/#{target}", 'targets'
+    plugin.puts "TARGET #{target}"
+  end
+  plugin.puts ""
+
+  puts "Migrating /lib & /procedures to #{target_name}"
+  FileUtils.cp_r '../lib', "targets/#{target_name}"
+  FileUtils.cp_r '../procedures', "targets/#{target_name}"
+
+  # Migrate cmd_tlm_server.txt info to plugin.txt
+  Dir.glob('targets/**/cmd_tlm_server*.txt') do |file|
+    File.open(file) do |file|
+      file.each do |line|
+        next if line =~ /^\s*#/ # Ignore comments
+        next if line.strip.empty? # Ignore empty lines
+        # Convert TARGET to MAP_TARGET
+        line.gsub!(/TARGET (\S+)/, 'MAP_TARGET \1')
+        plugin.puts line
+      end
+    end
+    plugin.puts ''
+  end
+  plugin.close
+  puts "Plugin complete: #{File.expand_path('.')}" # Remember we're inside the plugin dir
 end
 
 # A helper method to make the zip writing recursion work
@@ -320,20 +221,42 @@ def load_plugin(plugin_file_path, scope:)
       scope_model.create
       scope_model.deploy(".", {})
     rescue => err
-      puts "Error creating scope: #{scope}: #{err.formatted}"
+      abort("Error creating scope: #{scope}: #{err.formatted}")
     end
   end
 
   begin
-    plugin_hash = Cosmos::PluginModel.install_phase1(plugin_file_path, scope: scope)
-    Cosmos::PluginModel.install_phase2(plugin_hash['name'], plugin_hash['variables'], scope: scope)
+    # Try to find an existing plugin with this file to upgrade
+    gem_filename = File.basename(plugin_file_path, ".gem")
+    gem_filename = gem_filename.split('-')[0..-2].join('-')
+    plugin_names = Cosmos::PluginModel.names(scope: scope)
+    found = false
+    plugin_names.each do |plugin_name|
+      gem_name = plugin_name.split("__")[0]
+      gem_name = File.basename(plugin_name, ".gem")
+      gem_name = gem_name.split('-')[0..-2].join('-')
+      if gem_filename == gem_name
+        puts "Upgrading existing plugin: #{plugin_name} with #{plugin_file_path}"
+        plugin_model = Cosmos::PluginModel.get_model(name: plugin_name, scope: scope)
+        variables = plugin_model.variables
+        plugin_model.destroy
+        plugin_hash = Cosmos::PluginModel.install_phase1(plugin_file_path, variables, scope: scope)
+        Cosmos::PluginModel.install_phase2(plugin_hash['name'], plugin_hash['variables'], scope: scope)
+        found = true
+      end
+    end
+    unless found
+      puts "Loading new plugin: #{plugin_file_path}"
+      plugin_hash = Cosmos::PluginModel.install_phase1(plugin_file_path, scope: scope)
+      Cosmos::PluginModel.install_phase2(plugin_hash['name'], plugin_hash['variables'], scope: scope)
+    end
   rescue => err
-    puts "Error installing plugin: #{scope}: #{plugin_file_path}: #{err.formatted}"
+    abort("Error installing plugin: #{scope}: #{plugin_file_path}: #{err.formatted}")
   end
 end
 
 def get_redis_keys
-  redis = Redis.new(url: $redis_url)
+  redis = Redis.new(url: $redis_url, username: ENV['COSMOS_REDIS_USERNAME'], password: ENV['COSMOS_REDIS_PASSWORD'])
   puts "\n--- COSMOS Redis database keys ---"
   cursor = 0
   keys = []
@@ -362,30 +285,57 @@ if not ARGV[0].nil? # argument(s) given
 
   # Handle each task
   case ARGV[0].downcase
+
+  when 'rake'
+    puts `rake #{ARGV[1..-1].join(' ')}`
+
   when 'load'
     load_plugin(ARGV[1], scope: ARGV[2])
 
-  when 'docs'
-    thread = Thread.new do
-      system('yard server --gems')
-    end
-    sleep 3
-    Cosmos.open_in_web_browser('http://127.0.0.1:8808/docs/cosmos/frames')
-    thread.join
-
-  when 'install'
-    # Create a COSMOS barebones user directory
-    install('', 'install')
-
-  when 'demo'
-    # Create a COSMOS demo user directory
-    install('Demo', 'demo')
+  # TODO: This will require more work in COSMOS 5 ... would be nice to spawn
+  # in docker container and then map out port to access locally
+  # when 'docs'
+  #   thread = Thread.new do
+  #     system('yard server --gems')
+  #   end
+  #   sleep 3
+  #   Cosmos.open_in_web_browser('http://127.0.0.1:8808/docs/cosmos/frames')
+  #   thread.join
 
   when 'generate'
     generate(ARGV[1..-1])
 
-  when 'check_limits'
-    check_limits(ARGV[1..-1])
+  when 'migrate'
+    migrate(ARGV[1..-1])
+
+  when 'rubysloc'
+    puts `ruby /cosmos/bin/rubysloc #{ARGV[1..-1].join(' ')}`
+
+  when 'cstol_converter'
+    puts `ruby /cosmos/bin/cstol_converter #{ARGV[1..-1].join(' ')}`
+
+  # TODO: This still needs work in COSMOS 5
+  # when 'xtce_converter'
+  #   puts `ruby /cosmos/bin/xtce_converter #{ARGV[1..-1].join(' ')}`
+
+  when 'bridge'
+    filename = ARGV[1]
+    filename = 'bridge.txt' unless filename
+    bridge = Cosmos::Bridge.new(filename)
+    begin
+      while true
+        sleep(1)
+      end
+    rescue Interrupt
+      exit(0)
+    end
+
+  when 'bridgesetup'
+    filename = ARGV[1]
+    filename = 'bridge.txt' unless filename
+    unless File.exist?(filename)
+      Cosmos::BridgeConfig.generate_default(filename)
+    end
 
   when 'help'
     print_usage()
@@ -395,7 +345,7 @@ if not ARGV[0].nil? # argument(s) given
     when 'keys'
       get_redis_keys()
     when 'hget'
-      redis = Redis.new(url: $redis_url)
+      redis = Redis.new(url: $redis_url, username: ENV['COSMOS_REDIS_USERNAME'], password: ENV['COSMOS_REDIS_PASSWORD'])
       puts JSON.parse(redis.hget(ARGV[2], ARGV[3]))
     else
       puts "Unknown redis task: #{ARGV[1]}\n"
@@ -403,8 +353,8 @@ if not ARGV[0].nil? # argument(s) given
     end
 
   else # Unknown task
-    puts "Unknown task: #{ARGV[0]}\n"
     print_usage()
+    abort("Unknown task: #{ARGV[0]}")
   end
 
 else # No arguments given

@@ -1,5 +1,5 @@
-FROM cosmos-base
+FROM ballaerospace/cosmosc2-base
 
 WORKDIR /cosmos/lib/cosmos/operators/
-ENTRYPOINT [ "ruby" ]
-CMD [ "microservice_operator.rb"]
+
+CMD [ "ruby", "microservice_operator.rb"]

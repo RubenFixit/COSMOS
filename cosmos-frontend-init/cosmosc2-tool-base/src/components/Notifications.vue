@@ -19,7 +19,7 @@
 
 <template>
   <div>
-    <v-overlay :value="showNotificationPane" class="notifications-overlay" />
+    <v-overlay :value="showNotificationPane" class="overlay" />
     <v-menu
       v-model="showNotificationPane"
       transition="slide-y-transition"
@@ -161,7 +161,7 @@
         <v-card-text>
           {{ selectedNotification.body }}
         </v-card-text>
-        <v-divider></v-divider>
+        <v-divider />
         <v-card-actions>
           <v-btn
             color="primary"
@@ -184,7 +184,7 @@
         <v-card-text>
           <v-switch v-model="showToastSetting" label="Show toasts" />
         </v-card-text>
-        <v-divider></v-divider>
+        <v-divider />
         <v-card-actions>
           <v-btn color="primary" text @click="toggleSettingsDialog">
             close
@@ -196,7 +196,6 @@
 </template>
 
 <script>
-import * as ActionCable from 'actioncable'
 import { formatDistanceToNow } from 'date-fns'
 import { AstroStatusColors } from '../../../packages/cosmosc2-tool-common/src/components/icons'
 import {
@@ -204,6 +203,7 @@ import {
   orderBySeverity,
   groupBySeverity,
 } from '../util/AstroStatus'
+import Cable from '../../../packages/cosmosc2-tool-common/src/services/cable.js'
 
 export default {
   props: {
@@ -215,8 +215,8 @@ export default {
   data: function () {
     return {
       AstroStatusColors,
-      cable: ActionCable.Cable,
-      subscription: ActionCable.Channel,
+      cable: new Cable(),
+      subscription: null,
       notifications: [],
       showNotificationPane: false,
       toast: false,
@@ -299,7 +299,6 @@ export default {
   },
   created: function () {
     this.showToastSetting = localStorage.notoast === 'false'
-    this.cable = ActionCable.createConsumer('/cosmos-api/cable')
     this.subscribe()
   },
   destroyed: function () {
@@ -351,21 +350,22 @@ export default {
       window.open(url, '_blank')
     },
     subscribe: function () {
-      const startOptions = {
-        start_offset:
-          localStorage.notificationStreamOffset ||
-          localStorage.lastReadNotification,
-      }
-      this.subscription = this.cable.subscriptions.create(
-        {
-          channel: 'NotificationsChannel',
-          scope: 'DEFAULT',
-          ...startOptions,
-        },
-        {
-          received: (data) => this.received(data),
-        }
-      )
+      this.cable
+        .createSubscription(
+          'NotificationsChannel',
+          localStorage.scope,
+          {
+            received: (data) => this.received(data),
+          },
+          {
+            start_offset:
+              localStorage.notificationStreamOffset ||
+              localStorage.lastReadNotification,
+          }
+        )
+        .then((subscription) => {
+          this.subscription = subscription
+        })
     },
     received: function (data) {
       const parsed = JSON.parse(data)
@@ -424,7 +424,7 @@ export default {
   width: 100%;
 }
 
-.notifications-overlay {
+.overlay {
   height: 100vh;
   width: 100vw;
 }

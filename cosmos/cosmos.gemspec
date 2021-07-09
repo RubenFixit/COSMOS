@@ -46,7 +46,7 @@ spec = Gem::Specification.new do |s|
   else
     s.version = '0.0.0'
   end
-  s.license = 'GPL-3.0'
+  s.license = 'AGPL-3.0-only'
 
   # Executables
   s.executables << 'cosmos'
@@ -95,11 +95,12 @@ spec = Gem::Specification.new do |s|
   s.add_runtime_dependency 'puma', '~> 5.0'
   s.add_runtime_dependency 'rack', '~> 2.0'
   s.add_runtime_dependency 'httpclient', '~> 2.8'
-  s.add_runtime_dependency 'redis', '~> 4.2'
+  s.add_runtime_dependency 'redis', '~> 4.3'
   s.add_runtime_dependency 'childprocess', '~> 3.0'
   s.add_runtime_dependency 'connection_pool', '~> 2.2'
   s.add_runtime_dependency 'aws-sdk-s3', '~> 1.67'
-  s.add_runtime_dependency 'geminabox', '~> 1.2'
+  s.add_runtime_dependency 'rufus-scheduler', '~> 3.7'
+  s.add_runtime_dependency 'tzinfo-data', '~> 1'
 
   # Development Dependencies
   s.add_development_dependency 'diff-lcs', '~> 1.3' if RUBY_ENGINE == 'ruby' # Get latest for MRI
@@ -108,7 +109,7 @@ spec = Gem::Specification.new do |s|
   s.add_development_dependency 'flay', '~> 2.0'
   # s.add_development_dependency 'reek', '~> 6.0' # Dependency conflict
   s.add_development_dependency 'listen', '~> 3.0'
-  s.add_development_dependency 'mock_redis', '~> 0.27.3'
+  s.add_development_dependency 'mock_redis', '~> 0.28'
   # s.add_development_dependency 'guard', '~> 2.0'
   # s.add_development_dependency 'guard-bundler', '~> 2.0'
   # s.add_development_dependency 'guard-rspec', '~> 4.0'

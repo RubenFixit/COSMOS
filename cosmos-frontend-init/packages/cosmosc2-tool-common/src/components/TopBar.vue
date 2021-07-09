@@ -18,11 +18,14 @@
 -->
 
 <template>
-  <MountingPortal mountTo="#cosmos-menu" append>
+  <mounting-portal mountTo="#cosmos-menu" append>
     <div class="v-toolbar__content">
       <v-menu offset-y v-for="(menu, i) in menus" :key="i">
-        <template v-slot:activator="{ on }">
-          <v-btn icon v-on="on">{{ menu.label }}</v-btn>
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn outlined v-bind="attrs" v-on="on" class="mx-1">
+            <span v-text="menu.label" />
+            <v-icon right> mdi-menu-down </v-icon>
+          </v-btn>
         </template>
         <v-list>
           <!-- The radio-group is necessary in case the application wants radio buttons -->
@@ -33,31 +36,46 @@
             class="ma-0 pa-0"
           >
             <template v-for="(option, j) in menu.items">
-              <v-divider v-if="option.divider" :key="j"></v-divider>
-              <v-list-item v-else :key="j" @click="option.command">
-                <v-list-item-action v-if="option.radio">
+              <v-divider v-if="option.divider" :key="j" />
+              <v-list-item
+                v-else
+                :key="j"
+                @click="option.command"
+                :disabled="option.disabled"
+              >
+                <v-list-item-action
+                  v-if="option.radio"
+                  :disabled="option.disabled"
+                >
                   <v-radio
                     color="secondary"
                     :label="option.label"
                     :value="option.label"
-                  ></v-radio>
+                  />
                 </v-list-item-action>
-                <v-list-item-action v-if="option.checkbox">
+                <v-list-item-action
+                  v-if="option.checkbox"
+                  :disabled="option.disabled"
+                >
                   <v-checkbox
                     color="secondary"
                     :label="option.label"
                     :value="option.label"
                     v-model="checked"
-                  ></v-checkbox>
+                  />
                 </v-list-item-action>
                 <v-list-item-icon v-if="option.icon">
-                  <v-icon v-text="option.icon"></v-icon>
+                  <v-icon v-text="option.icon" :disabled="option.disabled" />
                 </v-list-item-icon>
                 <v-list-item-title
                   v-if="!option.radio && !option.checkbox"
-                  style="cursor: pointer"
-                  >{{ option.label }}</v-list-item-title
+                  :style="
+                    'cursor: pointer;' + (option.disabled ? 'opacity: 0.2' : '')
+                  "
+                  :disabled="option.disabled"
                 >
+                  {{ option.label }}
+                </v-list-item-title>
               </v-list-item>
             </template>
           </v-radio-group>
@@ -67,7 +85,7 @@
       <v-toolbar-title>{{ title }}</v-toolbar-title>
       <v-spacer />
     </div>
-  </MountingPortal>
+  </mounting-portal>
 </template>
 
 <script>
